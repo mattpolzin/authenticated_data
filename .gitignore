@@ -1,0 +1,9 @@
+.DS_Store
+*.*~
+*.swp
+/build/*
+/Test/build/*
+/Example/build/*
+libpg-idris
+*.d
+*.o
