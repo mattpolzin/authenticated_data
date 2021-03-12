@@ -1,22 +1,23 @@
+
+--
+-- This code is based on the semantics from
+-- [Authenticated Data Structures, Generically](http://www.cs.umd.edu/~mwh/papers/gpads.pdf) 
+--
+
 module Auth
 
-import Decidable.Equality
+import Data.DPair
+import Data.Bits
+
+%default total
 
 public export
 0 Hash : Type
 Hash = String
 
 public export
-interface Hashable ty where
+interface SecureHashable ty where
   hash : ty -> Hash
-
--- public export
--- Hashable Hash where
---   hash = id
-
-public export
-Show a => Hashable a where
-  hash = show
 
 public export
 interface Projectable a b where
@@ -40,12 +41,35 @@ Fold b = FoldP
 
 export
 data Proof : (a : Type) -> Type where
-  Nil  : Hashable a => Proof a
-  Cons : Hashable a => a -> Proof a -> Proof a
+  Nil  : SecureHashable a => Proof a
+  Cons : SecureHashable a => a -> Proof a -> Proof a
 
-snoc : Proof a -> a -> Proof a
-snoc [] x = Cons x Nil
-snoc (Cons z prf) x = Cons z (snoc prf x)
+namespace ReversedProof
+  ||| Foorp is a reversed Proof stream.
+  export
+  data Foorp : (a : Type) -> Type where
+    Nil  : SecureHashable a => Foorp a
+    Cons : SecureHashable a => a -> Foorp a -> Foorp a
+
+  export
+  empty : SecureHashable a => Foorp a
+  empty = Nil
+
+  -- pull Foorp apart to regain SecureHashable a
+  export
+  (::) : a -> Foorp a -> Foorp a
+  x :: Nil = Cons x Nil
+  x :: xs@(Cons y z) = Cons x xs
+
+  fromFoorp' : (first : a) -> (rest : Foorp a) -> (acc : Proof a) -> Proof a
+  fromFoorp' x [] = Cons x
+  fromFoorp' x (Cons y ys) = fromFoorp' y ys . Cons x
+
+  -- pull Foorp apart to regain SecureHashable a
+  export
+  fromFoorp : Foorp a -> Proof a
+  fromFoorp [] = []
+  fromFoorp (Cons x xs) = fromFoorp' x xs []
 
 namespace Prover
   public export
@@ -57,20 +81,20 @@ namespace Prover
     shallowProjection (Hashed hashed _) = hashed
 
   export
-  auth : (Hashable b, Projectable a b) => (context : Proof b) -> a -> (Proof b, Elem a)
+  auth : (SecureHashable b, Projectable a b) => (context : Foorp b) -> a -> (Foorp b, Elem a)
   auth ctx x = (ctx, Hashed (hash (the b (shallowProjection x))) x)
 
   export
-  auth' : (Hashable b, Projectable a b) => a -> Elem a
+  auth' : (SecureHashable b, Projectable a b) => a -> Elem a
   auth' x = Hashed (hash (the b (shallowProjection x))) x
 
   export
-  unauth : (Projectable a b) => (context : Proof b) -> Elem a -> (Proof b, a)
-  unauth ctx (Hashed hashed x) = (snoc ctx (shallowProjection x), x)
+  unauth : (Projectable a b) => (context : Foorp b) -> Elem a -> (Foorp b, a)
+  unauth ctx (Hashed hashed x) = ((shallowProjection x) :: ctx, x)
   
 namespace Verifier
   export
-  auth : Hashable a => (context : Proof a) -> a -> (Proof a, Hash)
+  auth : SecureHashable a => (context : Proof a) -> a -> (Proof a, Hash)
   auth ctx x = (ctx, hash x)
 
   export
@@ -81,11 +105,11 @@ namespace Verifier
                                     False => Nothing
 
 data Server : (Type -> Type) -> Type -> Type where
-  SAuthed : (Hashable a, Foldable t) => t (Prover.Elem a) -> Server t a
+  SAuthed : (SecureHashable a, Foldable t) => t (Prover.Elem a) -> Server t a
 
 namespace Server
   export
-  fromList : {auto hashable : Hashable a} -> List a -> Server List a
+  fromList : {auto hashable : SecureHashable a} -> List a -> Server List a
   fromList = SAuthed . map (auth' @{(hashable, Ident)})
     where
       elem : (Hash, a) -> Elem a
@@ -93,9 +117,9 @@ namespace Server
 
   export
   authedIndex : (n : Nat) -> (Server List a) -> Maybe (Proof a, a)
-  authedIndex n (SAuthed xs) = authedIndex' n [] xs
+  authedIndex n (SAuthed xs) = (mapFst fromFoorp) <$> authedIndex' n empty xs
     where
-      authedIndex' : (n : Nat) -> (context : Proof a) -> List (Elem a) -> Maybe (Proof a, a)
+      authedIndex' : (n : Nat) -> (context : Foorp a) -> List (Elem a) -> Maybe (Foorp a, a)
       authedIndex' 0 _ [] = Nothing
       authedIndex' 0 ctx (x :: xs) = Just $ unauth ctx x
       authedIndex' (S k) ctx [] = Nothing
@@ -104,11 +128,11 @@ namespace Server
                                                        authedIndex' k ctx' ys
 
 data Client : (Type -> Type) -> Type -> Type where
-  CAuthed : (Hashable a, Foldable t) => t Hash -> Client t a
+  CAuthed : (SecureHashable a, Foldable t) => t Hash -> Client t a
 
 namespace Client
   export
-  fromList : Hashable a => List a -> Client List a
+  fromList : SecureHashable a => List a -> Client List a
   fromList = CAuthed . map hash
 
   export
@@ -120,6 +144,9 @@ namespace Client
   verifiedIndex (S k) (CAuthed (x :: xs)) serverProof@(Cons val serverProof') = (unauth serverProof x) *> (verifiedIndex k (CAuthed xs) serverProof')
 
 namespace TestString
+  SecureHashable String where
+    hash = show
+
   export
   list1 : List String
   list1 = ["hello", "world", "good", "day"]
@@ -142,30 +169,58 @@ namespace TestString
                     verifiedIndex 2 clientList serverProof
 
 namespace TestInt
+  SecureHashable Int where
+    hash = show
+
   -- source of truth
   export
-  list1 : List Integer
+  list1 : List Int
   list1 = [1, 2, 3, 4, 5, 6, 7]
 
   -- untrusted server has this list to calculate from
   export
-  serverList : Server List Integer
+  serverList : Server List Int
   serverList = fromList list1
 
   -- client has this to verify with
   export
-  clientList : Client List Integer
+  clientList : Client List Int
   clientList = fromList list1
 
   -- server generates authed response
   export
-  authedSix : Maybe (Proof Integer, Integer)
+  authedSix : Maybe (Proof Int, Int)
   authedSix = authedIndex 5 serverList
 
   -- client verifies server response
   export
-  verifiedSix : Maybe Integer
+  verifiedSix : Maybe Int
   verifiedSix = do (serverProof, _) <- authedSix
                    verifiedIndex 5 clientList serverProof
+
+  [Obfuscated] SecureHashable Int where
+    hash = show . Bits.complement . (flip Bits.setBit (Element 2 %search))
+
+  export
+  serverList2 : Server List Int
+  serverList2 = fromList list1 @{Obfuscated}
+
+  export
+  clientList2 : Client List Int
+  clientList2 = fromList list1 @{Obfuscated}
+
+  export
+  authedFive : Maybe (Proof Int, Int)
+  authedFive = authedIndex 4 serverList2
+
+  export
+  verifiedFive : Maybe Int
+  verifiedFive = do (serverProof, _) <- authedFive
+                    verifiedIndex 4 clientList2 serverProof
+
+
+
+
+
 
 
