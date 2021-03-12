@@ -8,6 +8,8 @@ module Auth
 
 import Data.DPair
 import Data.Bits
+import Data.List
+import Control.Monad.Identity
 
 %default total
 
@@ -24,6 +26,14 @@ interface Projectable a b where
   shallowProjection : a -> b
 
 public export
+[ProjH] (SecureHashable b, Projectable a b) => SecureHashable a where
+  hash x = hash $ (the b $ shallowProjection x)
+
+public export
+ProjHash : (b : Type) -> {auto p : Projectable a b} -> {auto h : SecureHashable b} -> SecureHashable a
+ProjHash _ = ProjH @{(h, p)}
+
+public export
 [Ident] Projectable a a where
   shallowProjection = id
 
@@ -33,7 +43,7 @@ identityProjection = Ident
 
 public export
 [FoldP] (Foldable t, Projectable a b, Monoid b) => Projectable (t a) b where
-  shallowProjection = foldr (\e, _ => shallowProjection e) neutral
+  shallowProjection = foldr (\e, acc => shallowProjection e <+> acc) neutral
 
 public export
 Fold : Foldable t => (b : Type) -> (Monoid b, Projectable a b) => Projectable (t a) b
@@ -76,6 +86,14 @@ namespace Prover
   data Elem : a -> Type where
     Hashed : Hash -> a -> Elem a
 
+  export 
+  value : Elem a -> a
+  value (Hashed _ v) = v
+
+  export
+  hash : Elem a -> Hash
+  hash (Hashed h _) = h
+
   export
   Projectable (Elem a) Hash where
     shallowProjection (Hashed hashed _) = hashed
@@ -105,7 +123,7 @@ namespace Verifier
                                     False => Nothing
 
 data Server : (Type -> Type) -> Type -> Type where
-  SAuthed : (SecureHashable a, Foldable t) => t (Prover.Elem a) -> Server t a
+  SAuthed : (SecureHashable a, Functor f) => f (Prover.Elem a) -> Server f a
 
 namespace Server
   export
@@ -168,6 +186,7 @@ namespace TestString
   verifiedGood = do (serverProof, _) <- authedGood 
                     verifiedIndex 2 clientList serverProof
 
+
 namespace TestInt
   SecureHashable Int where
     hash = show
@@ -218,7 +237,30 @@ namespace TestInt
   verifiedFive = do (serverProof, _) <- authedFive
                     verifiedIndex 4 clientList2 serverProof
 
+namespace TestListListString
+  SecureHashable String where
+    hash = reverse
 
+  export
+  list1 : List (List String)
+  list1 = [["hello", "world"], ["good", "day"]]
+
+  export
+  serverList : Server List (List String)
+  serverList = fromList list1 @{ProjHash String @{FoldP}}
+
+  export
+  clientList : Client List (List String)
+  clientList = fromList list1 @{ProjHash String @{FoldP}}
+
+  export
+  authedGoodDay : Maybe (Proof (List String), List String)
+  authedGoodDay = authedIndex 1 serverList
+
+  export
+  verifiedGoodDay : Maybe (List String)
+  verifiedGoodDay = do (serverProof, _) <- authedGoodDay 
+                       verifiedIndex 1 clientList serverProof
 
 
 
