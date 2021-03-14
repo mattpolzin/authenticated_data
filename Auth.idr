@@ -66,9 +66,9 @@ namespace ReversedProof
   fromFoorp (Cons x xs) = fromFoorp' x xs Nil
 
 public export
-interface Monad m => Authenticated m (0 elem : Type -> Type) where
-  auth   : Encodable a => a -> m (elem a)
-  unauth : Encodable a => m (elem a) -> m a
+interface Monad m => Authenticated m (0 ety : Type -> Type) where
+  auth   : Encodable a => a -> m (ety a)
+  unauth : Encodable a => m (ety a) -> m a
 
 export
 record ProverM a where
@@ -116,37 +116,42 @@ export
                                   in
                                       (foorp', x)
 
-record VerifierM a where
+%hint
+public export
+ProverAuthHint : (SecureHashable String, Encodable a) => Authenticated ProverM (Hash,)
+ProverAuthHint = ProverAuth
+
+record VerifierM decoded a where
   constructor MkVerifierM
   runVerifier : Proof -> Maybe (Proof, a)
 
 public export
-0 Verifier : Type
-Verifier = VerifierM Hash
+0 Verifier : Type -> Type
+Verifier a = VerifierM a Hash
 
 export
-Functor VerifierM where
+Functor (VerifierM d) where
   map f (MkVerifierM runVerifier) = MkVerifierM $ \proof => 
                                      do (proof', x) <- runVerifier proof
                                         Just (proof', f x)
 
-bindv : VerifierM a -> (a -> VerifierM b) -> VerifierM b
+bindv : VerifierM d a -> (a -> VerifierM d b) -> VerifierM d b
 bindv (MkVerifierM runVerifier) f = MkVerifierM $ \proof => 
                                      do (proof', x) <- runVerifier proof
                                         (f x).runVerifier proof'
 
 export
-[VerifierAp] Applicative VerifierM where
+[VerifierAp] Applicative (VerifierM d) where
   pure x = MkVerifierM $ \proof => Just (proof, x)
   f <*> p = bindv f $ \f' => 
               bindv p $ \p' => MkVerifierM $ \proof => Just (proof, f' p')
 
 export
-Monad VerifierM using VerifierAp where
+Monad (VerifierM d) using VerifierAp where
   (>>=) = bindv
 
 export
-[VerifierAuth] SecureHashable String => Authenticated VerifierM (const Hash) where
+[VerifierAuth] SecureHashable String => Authenticated (VerifierM d) (const Hash) where
   auth x = MkVerifierM $ \proof => 
              let hashed = (hash x) 
              in 
@@ -161,11 +166,20 @@ export
                                                 True  => Just (proof', decode x)
                                                 False => Nothing
 
+%hint
+public export
+VerifierAuthHint : (SecureHashable String, Encodable d) => (Encodable d, Authenticated (VerifierM d) (const Hash))
+VerifierAuthHint @{(_, e)}= (e, VerifierAuth)
+
+export
+authed : (Encodable a, Authenticated m authty) => a -> m (authty a)
+authed x @{(_, auther)} = auth x @{auther}
+
 namespace Prover
   ||| Create a prover for the given encodable type.
   export
   prover : (SecureHashable String, Encodable a) => a -> Prover a
-  prover x = auth x @{ProverAuth}
+  prover = authed
 
   ||| Take the reversed proof output from a prover
   ||| (Foorp) and package it up as a Proof to send
@@ -177,8 +191,8 @@ namespace Prover
 namespace Verifier
   ||| Create a verifier for the given encodable type.
   export
-  verifier : (SecureHashable String, Encodable a) => a -> Verifier
-  verifier x = auth x @{VerifierAuth}
+  verifier : (SecureHashable String, Encodable a) => a -> Verifier a
+  verifier = authed @{VerifierAuthHint}
 
 namespace StringTest
   SecureHashable String where
@@ -197,7 +211,7 @@ namespace StringTest
   serverString = prover str
 
   export
-  clientString : Verifier
+  clientString : Verifier String
   clientString = verifier str 
 
   export
@@ -209,31 +223,29 @@ namespace StringTest
                             |  _ => Nothing -- there was some proof left over unexpectedly
                           pure (snd payload)
 
-{-
 namespace ListTest
   export
   list1 : List String
   list1 = ["hello", "world", "good", "day"]
 
-  data L : (Type -> Type) -> (0 ety : Type -> Type) -> Type -> Type where
-    Nil  : L m ety a
-    Cons : a -> (L m ety a) -> L m ety a
+  data L : (0 m : Type -> Type) -> (0 authty : Type -> Type) -> Type -> Type where
+    Nil  : L m authty a
+    Cons : m (authty a) -> (L m authty a) -> L m authty a
 
-  0 AuthList : Authenticated m ety => Type -> Type
-  AuthList a = m (ety (L m ety a))
+  0 AuthList : Authenticated m authty => Type -> Type
+  AuthList a = m (authty (L m authty a))
 
---   toAuthList : {auto auther : Authenticated m ety e} -> List a -> AuthList a @{auther}
+--   toAuthList : Authenticated m ety e} -> List a -> AuthList a @{auther}
 --   toAuthList [] = auth ListTest.Nil @{auther}
 --   toAuthList (x :: xs) = ?toAuthList_rhs_2
 
-  index : (n : Nat) -> L m ety a -> Maybe a
-  index 0 [] = Nothing
-  index 0 (Cons x y) = Just x
-  index (S k) [] = Nothing
-  index (S k) (Cons _ xs) = index k xs
+--   index : (n : Nat) -> L m ety a -> Maybe a
+--   index 0 [] = Nothing
+--   index 0 (Cons x y) = Just x
+--   index (S k) [] = Nothing
+--   index (S k) (Cons _ xs) = index k xs
 
 --   export
 --   authedIndex : {auto auth : Authenticated m elem} -> (n : Nat) -> AuthList a @{auth} -> m (Maybe a)
 --   authedIndex n xs @{e} = unauth xs @{e} >>= \xs' => pure $ index n xs'
--}
 
