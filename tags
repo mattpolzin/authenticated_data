@@ -4,104 +4,177 @@
 !_TAG_PROGRAM_NAME	Exuberant Ctags	//
 !_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
 !_TAG_PROGRAM_VERSION	5.8	//
-(	Auth.idr	/^  (::) : a -> Foorp a -> Foorp a$/;"	d
+(	Auth.idr	/^  (::) : Encodable a => a -> Foorp -> Foorp$/;"	d
+(	Auth3.idr	/^  (::) : a -> Foorp a -> Foorp a$/;"	d
+(	Auth4.idr	/^  (::) : a -> Foorp a -> Foorp a$/;"	d
+(>>=)	Auth4.idr	/^  (>>=) : Prover a -> (a -> Prover b) -> Prover b$/;"	d
+(>>=)	Auth4.idr	/^  (>>=) : Verifier a -> (a -> Verifier b) -> Verifier b$/;"	d
 Auth	Auth1.idr	/^data Auth : Hashable b => Type -> Type where$/;"	t
 AuthList	Auth2.idr	/^  data AuthList : Type -> Type where$/;"	t
 Authed	Auth1.idr	/^  Authed : Projectable v b => v -> Auth v {b}$/;"	d
-CAuthed	Auth.idr	/^  CAuthed : (SecureHashable a, Foldable t) => t Hash -> Client t a$/;"	d
-Client	Auth.idr	/^data Client : (Type -> Type) -> Type -> Type where$/;"	t
-Cons	Auth.idr	/^    Cons : SecureHashable a => a -> Foorp a -> Foorp a$/;"	d
-Cons	Auth.idr	/^  Cons : SecureHashable a => a -> Proof a -> Proof a$/;"	d
+CAuthed	Auth3.idr	/^  CAuthed : (SecureHashable a, Foldable t) => t Hash -> Client t a$/;"	d
+Client	Auth3.idr	/^data Client : (Type -> Type) -> Type -> Type where$/;"	t
+Cons	Auth.idr	/^    Cons : Encodable a => a -> Foorp -> Foorp$/;"	d
+Cons	Auth.idr	/^    Cons : a -> (L m ety a) -> L m ety a$/;"	d
+Cons	Auth.idr	/^  Cons : String -> Proof -> Proof$/;"	d
 Cons	Auth1.idr	/^  Cons : Projectable a b => b -> Proof b -> Proof b$/;"	d
 Cons	Auth2.idr	/^    Cons : a -> Prover.Elem (AuthList a) -> AuthList a$/;"	d
 Cons	Auth2.idr	/^  Cons : Projectable a b => b -> Proof b -> Proof b$/;"	d
-Elem	Auth.idr	/^  data Elem : a -> Type where$/;"	t
+Cons	Auth3.idr	/^    Cons : SecureHashable a => a -> Foorp a -> Foorp a$/;"	d
+Cons	Auth3.idr	/^  Cons : SecureHashable a => a -> Proof a -> Proof a$/;"	d
+Cons	Auth4.idr	/^    Cons : a -> Foorp a -> Foorp a$/;"	d
+Cons	Auth4.idr	/^  Cons : a -> Proof a -> Proof a$/;"	d
 Elem	Auth1.idr	/^  data Elem : a -> Type where$/;"	t
 Elem	Auth2.idr	/^  data Elem : a -> Type where$/;"	t
-Fold	Auth.idr	/^Fold : Foldable t => (b : Type) -> (Monoid b, Projectable a b) => Projectable (t a) b$/;"	d
+Elem	Auth3.idr	/^  data Elem : a -> Type where$/;"	t
 Fold	Auth2.idr	/^Fold : Foldable t => (b : Type) -> (Monoid b, Projectable a b) => Projectable (t a) b$/;"	d
-Foorp	Auth.idr	/^  data Foorp : (a : Type) -> Type where$/;"	t
+Fold	Auth3.idr	/^Fold : Foldable t => (b : Type) -> (Monoid b, Projectable a b) => Projectable (t a) b$/;"	d
+Fold	Auth4.idr	/^Fold : Foldable t => (b : Type) -> (Monoid b, Projectable a b) => Projectable (t a) b$/;"	d
+Foorp	Auth.idr	/^  data Foorp : Type where$/;"	t
+Foorp	Auth3.idr	/^  data Foorp : (a : Type) -> Type where$/;"	t
+Foorp	Auth4.idr	/^  data Foorp : Type -> Type where$/;"	t
 Full	Auth1.idr	/^    Full : (hash : Hash) -> (value : a) -> Elem a$/;"	d
 Full	Auth2.idr	/^    Full : (hash : Hash) -> (value : a) -> Elem a$/;"	d
-Hashed	Auth.idr	/^    Hashed : Hash -> a -> Elem a$/;"	d
-Nil	Auth.idr	/^    Nil  : SecureHashable a => Foorp a$/;"	d
-Nil	Auth.idr	/^  Nil  : SecureHashable a => Proof a$/;"	d
+Hash	Auth4.idr	/^Hash : Type$/;"	d
+Hashed	Auth3.idr	/^    Hashed : Hash -> a -> Elem a$/;"	d
+L	Auth.idr	/^  data L : (Type -> Type) -> (0 ety : Type -> Type) -> Type -> Type where$/;"	t
+Nil	Auth.idr	/^    Nil  : Foorp $/;"	d
+Nil	Auth.idr	/^    Nil  : L m ety a$/;"	d
+Nil	Auth.idr	/^  Nil  : Proof$/;"	d
 Nil	Auth1.idr	/^  Nil  : Projectable a b => Proof b$/;"	d
 Nil	Auth2.idr	/^    Nil : AuthList a$/;"	d
 Nil	Auth2.idr	/^  Nil  : Projectable a b => Proof b$/;"	d
-Proof	Auth.idr	/^data Proof : (a : Type) -> Type where$/;"	t
+Nil	Auth3.idr	/^    Nil  : SecureHashable a => Foorp a$/;"	d
+Nil	Auth3.idr	/^  Nil  : SecureHashable a => Proof a$/;"	d
+Nil	Auth4.idr	/^    Nil  : Foorp a$/;"	d
+Nil	Auth4.idr	/^  Nil  : Proof a$/;"	d
+ProjHash	Auth3.idr	/^ProjHash : (b : Type) -> {auto p : Projectable a b} -> {auto h : SecureHashable b} -> SecureHashable a$/;"	d
+ProjHash	Auth4.idr	/^ProjHash : (b : Type) -> {auto p : Projectable a b} -> {auto h : SecureHashable b} -> SecureHashable a$/;"	d
+Proof	Auth.idr	/^data Proof : Type where$/;"	t
 Proof	Auth1.idr	/^data Proof : (b : Type) -> Type where$/;"	t
 Proof	Auth2.idr	/^data Proof : (b : Type) -> Type where$/;"	t
-SAuthed	Auth.idr	/^  SAuthed : (SecureHashable a, Foldable t) => t (Prover.Elem a) -> Server t a$/;"	d
-Server	Auth.idr	/^data Server : (Type -> Type) -> Type -> Type where$/;"	t
+Proof	Auth3.idr	/^data Proof : (a : Type) -> Type where$/;"	t
+Proof	Auth4.idr	/^data Proof : Type -> Type where$/;"	t
+SAuthed	Auth3.idr	/^  SAuthed : (SecureHashable a, Functor f) => f (Prover.Elem a) -> Server f a$/;"	d
+Server	Auth3.idr	/^data Server : (Type -> Type) -> Type -> Type where$/;"	t
 Unauth	Auth1.idr	/^data Unauth : Hashable b => Type -> Type where$/;"	t
 Unauthed	Auth1.idr	/^  Unauthed : Projectable v b => v -> Unauth v {b}$/;"	d
-auth	Auth.idr	/^  auth : (SecureHashable b, Projectable a b) => (context : Foorp b) -> a -> (Foorp b, Elem a)$/;"	d
-auth	Auth.idr	/^  auth : SecureHashable a => (context : Proof a) -> a -> (Proof a, Hash)$/;"	d
+auth	Auth.idr	/^  auth   : Encodable a => a -> m (elem a)$/;"	d
 auth	Auth1.idr	/^  auth : Hashable a => a -> Hash$/;"	d
 auth	Auth1.idr	/^  auth : {auto proj : Projectable a b} -> Hashable b => a -> Elem a$/;"	d
 auth	Auth2.idr	/^  auth : Hashable a => a -> Hash$/;"	d
 auth	Auth2.idr	/^  auth : {auto proj : Projectable a b} -> Hashable b => a -> Elem a$/;"	d
-auth'	Auth.idr	/^  auth' : (SecureHashable b, Projectable a b) => a -> Elem a$/;"	d
+auth	Auth3.idr	/^  auth : (SecureHashable b, Projectable a b) => (context : Foorp b) -> a -> (Foorp b, Elem a)$/;"	d
+auth	Auth3.idr	/^  auth : SecureHashable a => (context : Proof a) -> a -> (Proof a, Hash)$/;"	d
+auth	Auth4.idr	/^  auth : SecureHashable a => a -> m (elem a)$/;"	d
+auth'	Auth3.idr	/^  auth' : (SecureHashable b, Projectable a b) => a -> Elem a$/;"	d
 authList	Auth2.idr	/^  authList : {a : Type} -> (Hashable a, Monoid a) => List a -> AuthList a$/;"	d
 authValue	Auth1.idr	/^  authValue : Hashable b => (context : Proof b) -> b -> (Proof b, Hash)$/;"	d
 authValue	Auth2.idr	/^  authValue : Hashable b => (context : Proof b) -> b -> (Proof b, Hash)$/;"	d
-authedFive	Auth.idr	/^  authedFive : Maybe (Proof Int, Int)$/;"	d
-authedGood	Auth.idr	/^  authedGood : Maybe (Proof String, String)$/;"	d
-authedIndex	Auth.idr	/^  authedIndex : (n : Nat) -> (Server List a) -> Maybe (Proof a, a)$/;"	d
+authedFive	Auth3.idr	/^  authedFive : Maybe (Proof Int, Int)$/;"	d
+authedGood	Auth3.idr	/^  authedGood : Maybe (Proof String, String)$/;"	d
+authedGoodDay	Auth3.idr	/^  authedGoodDay : Maybe (Proof (List String), List String)$/;"	d
 authedIndex	Auth2.idr	/^  authedIndex : {a : Type} -> Monoid a => (n : Nat) -> (xs : AuthList a) -> Maybe (Proof a, a)$/;"	d
-authedIndex'	Auth.idr	/^      authedIndex' : (n : Nat) -> (context : Foorp a) -> List (Elem a) -> Maybe (Foorp a, a)$/;"	d
+authedIndex	Auth3.idr	/^  authedIndex : (n : Nat) -> (Server List a) -> Maybe (Proof a, a)$/;"	d
 authedIndex'	Auth2.idr	/^      authedIndex' : (n : Nat) -> (context : Proof a) -> (xs : AuthList a) -> Maybe (Proof a, a)$/;"	d
-authedSix	Auth.idr	/^  authedSix : Maybe (Proof Int, Int)$/;"	d
-clientList	Auth.idr	/^  clientList : Client List Int$/;"	d
-clientList	Auth.idr	/^  clientList : Client List String$/;"	d
-clientList2	Auth.idr	/^  clientList2 : Client List Int$/;"	d
-elem	Auth.idr	/^      elem : (Hash, a) -> Elem a$/;"	d
-empty	Auth.idr	/^  empty : SecureHashable a => Foorp a$/;"	d
-fromFoorp	Auth.idr	/^  fromFoorp : Foorp a -> Proof a$/;"	d
-fromFoorp'	Auth.idr	/^  fromFoorp' : (first : a) -> (rest : Foorp a) -> (acc : Proof a) -> Proof a$/;"	d
-fromList	Auth.idr	/^  fromList : SecureHashable a => List a -> Client List a$/;"	d
-fromList	Auth.idr	/^  fromList : {auto hashable : SecureHashable a} -> List a -> Server List a$/;"	d
+authedIndex'	Auth3.idr	/^      authedIndex' : (n : Nat) -> (context : Foorp a) -> List (Elem a) -> Maybe (Foorp a, a)$/;"	d
+authedSix	Auth3.idr	/^  authedSix : Maybe (Proof Int, Int)$/;"	d
+bindp	Auth.idr	/^bindp : Prover a -> (a -> Prover b) -> Prover b$/;"	d
+bindp	Auth4.idr	/^bindp : Prover a -> (a -> Prover b) -> Prover b$/;"	d
+bindv	Auth.idr	/^bindv : Verifier a -> (a -> Verifier b) -> Verifier b$/;"	d
+bindv	Auth4.idr	/^bindv : Verifier a -> (a -> Verifier b) -> Verifier b$/;"	d
+checkHashed	Auth.idr	/^      checkHashed : Proof -> Hash -> Maybe (Proof, a)$/;"	d
+clientList	Auth3.idr	/^  clientList : Client List (List String)$/;"	d
+clientList	Auth3.idr	/^  clientList : Client List Int$/;"	d
+clientList	Auth3.idr	/^  clientList : Client List String$/;"	d
+clientList2	Auth3.idr	/^  clientList2 : Client List Int$/;"	d
+clientString	Auth.idr	/^  clientString : Verifier Hash$/;"	d
+decode	Auth.idr	/^  decode : String -> a$/;"	d
+elem	Auth3.idr	/^      elem : (Hash, a) -> Elem a$/;"	d
+empty	Auth.idr	/^  empty : Foorp$/;"	d
+empty	Auth3.idr	/^  empty : SecureHashable a => Foorp a$/;"	d
+empty	Auth4.idr	/^  empty : Foorp a$/;"	d
+encode	Auth.idr	/^  encode : a -> String$/;"	d
+fromFoorp	Auth.idr	/^  fromFoorp : Foorp -> Proof$/;"	d
+fromFoorp	Auth3.idr	/^  fromFoorp : Foorp a -> Proof a$/;"	d
+fromFoorp'	Auth.idr	/^  fromFoorp' : Encodable a => (first : a) -> (rest : Foorp) -> (acc : Proof) -> Proof$/;"	d
+fromFoorp'	Auth3.idr	/^  fromFoorp' : (first : a) -> (rest : Foorp a) -> (acc : Proof a) -> Proof a$/;"	d
+fromList	Auth3.idr	/^  fromList : SecureHashable a => List a -> Client List a$/;"	d
+fromList	Auth3.idr	/^  fromList : {auto hashable : SecureHashable a} -> List a -> Server List a$/;"	d
 hash	Auth.idr	/^  hash : ty -> Hash$/;"	d
 hash	Auth1.idr	/^  hash : a -> Hash$/;"	d
 hash	Auth2.idr	/^  hash : a -> Hash$/;"	d
-identityProjection	Auth.idr	/^identityProjection : Projectable a a$/;"	d
+hash	Auth3.idr	/^  hash : Elem a -> Hash$/;"	d
+hash	Auth3.idr	/^  hash : ty -> Hash$/;"	d
+hash	Auth4.idr	/^  hash : ty -> Hash$/;"	d
 identityProjection	Auth2.idr	/^identityProjection : Projectable a a$/;"	d
+identityProjection	Auth3.idr	/^identityProjection : Projectable a a$/;"	d
+identityProjection	Auth4.idr	/^identityProjection : Projectable a a$/;"	d
+index	Auth.idr	/^  index : (n : Nat) -> L m ety a -> Maybe a$/;"	d
 learn	watch_and_learn.sh	/^function learn() {$/;"	f
-list1	Auth.idr	/^  list1 : List Int$/;"	d
 list1	Auth.idr	/^  list1 : List String$/;"	d
 list1	Auth1.idr	/^list1 : List String$/;"	d
 list1	Auth2.idr	/^  list1 : AuthList String$/;"	d
 list1	Auth2.idr	/^list1 : List String$/;"	d
+list1	Auth3.idr	/^  list1 : List (List String)$/;"	d
+list1	Auth3.idr	/^  list1 : List Int$/;"	d
+list1	Auth3.idr	/^  list1 : List String$/;"	d
 list2	Auth1.idr	/^list2: Prover.Elem (List String)$/;"	d
 list2	Auth2.idr	/^list2: Prover.Elem (List String)$/;"	d
 list3	Auth2.idr	/^list3 : List (Prover.Elem String)$/;"	d
 list4	Auth2.idr	/^list4 : Prover.Elem (List (Prover.Elem String))$/;"	d
+packageProof	Auth.idr	/^  packageProof : (Foorp, (Hash, a)) -> (Proof, a)$/;"	d
 prove	Auth1.idr	/^  prove : {auto proj : Projectable a b} -> (context : Proof b) -> a -> (Proof b, Elem a)$/;"	d
 prove	Auth2.idr	/^  prove : Hashable b => {auto proj : Projectable a b} -> (context : Proof b) -> a -> (Proof b, Elem a)$/;"	d
+prover	Auth.idr	/^  prover : (SecureHashable String, Encodable a) => a -> Prover (Hash, a)$/;"	d
 res1	Auth1.idr	/^res1 : (Proof String, Prover.Elem String)$/;"	d
 res1	Auth2.idr	/^res1 : (Proof String, Prover.Elem String)$/;"	d
-serverList	Auth.idr	/^  serverList : Server List Int$/;"	d
-serverList	Auth.idr	/^  serverList : Server List String$/;"	d
-serverList2	Auth.idr	/^  serverList2 : Server List Int$/;"	d
-shallowProjection	Auth.idr	/^  shallowProjection : a -> b$/;"	d
+runProver	Auth.idr	/^  runProver : Foorp -> (Foorp, a)$/;"	d
+runProver	Auth4.idr	/^  runProver : Foorp a -> (Foorp a, a)$/;"	d
+runVerifier	Auth.idr	/^  runVerifier : Proof -> Maybe (Proof, a)$/;"	d
+runVerifier	Auth4.idr	/^  runVerifier : Proof a -> Maybe (Proof a, a)$/;"	d
+serverList	Auth3.idr	/^  serverList : Server List (List String)$/;"	d
+serverList	Auth3.idr	/^  serverList : Server List Int$/;"	d
+serverList	Auth3.idr	/^  serverList : Server List String$/;"	d
+serverList2	Auth3.idr	/^  serverList2 : Server List Int$/;"	d
+serverString	Auth.idr	/^  serverString : Prover (Hash, String)$/;"	d
 shallowProjection	Auth1.idr	/^  shallowProjection : a -> b$/;"	d
 shallowProjection	Auth2.idr	/^  shallowProjection : a -> b$/;"	d
+shallowProjection	Auth3.idr	/^  shallowProjection : a -> b$/;"	d
+shallowProjection	Auth4.idr	/^  shallowProjection : a -> b$/;"	d
 snoc	Auth1.idr	/^snoc : {auto proj : Projectable a b} -> Proof b -> b -> Proof b$/;"	d
 snoc	Auth2.idr	/^snoc : {auto proj : Projectable a b} -> Proof b -> b -> Proof b$/;"	d
-unauth	Auth.idr	/^  unauth : (Projectable a b) => (context : Foorp b) -> Elem a -> (Foorp b, a)$/;"	d
-unauth	Auth.idr	/^  unauth : (context : Proof a) -> Hash -> Maybe (Proof a, a)$/;"	d
+str	Auth.idr	/^  str : String$/;"	d
+unauth	Auth.idr	/^  unauth : Encodable a => m (elem a) -> m a$/;"	d
 unauth	Auth1.idr	/^  unauth : Elem a -> a$/;"	d
 unauth	Auth2.idr	/^  unauth : Elem a -> a$/;"	d
+unauth	Auth3.idr	/^  unauth : (Projectable a b) => (context : Foorp b) -> Elem a -> (Foorp b, a)$/;"	d
+unauth	Auth3.idr	/^  unauth : (context : Proof a) -> Hash -> Maybe (Proof a, a)$/;"	d
+unauth	Auth4.idr	/^  unauth : elem a -> (m a)$/;"	d
 unauthElem	Auth1.idr	/^  unauthElem : {auto proj : Projectable a b} -> (Proof b, Elem a) -> (Proof b, a)$/;"	d
 unauthElem	Auth2.idr	/^  unauthElem : {auto proj : Projectable a b} -> (Proof b, Elem a) -> (Proof b, a)$/;"	d
-verifiedFive	Auth.idr	/^  verifiedFive : Maybe Int$/;"	d
-verifiedGood	Auth.idr	/^  verifiedGood : Maybe String$/;"	d
-verifiedIndex	Auth.idr	/^  verifiedIndex : (n : Nat) -> (clientCert : Client List a) -> (serverProof : Proof a) -> Maybe a$/;"	d
-verifiedSix	Auth.idr	/^  verifiedSix : Maybe Int$/;"	d
+value	Auth3.idr	/^  value : Elem a -> a$/;"	d
+verifiedFive	Auth3.idr	/^  verifiedFive : Maybe Int$/;"	d
+verifiedGood	Auth3.idr	/^  verifiedGood : Maybe String$/;"	d
+verifiedGoodDay	Auth3.idr	/^  verifiedGoodDay : Maybe (List String)$/;"	d
+verifiedIndex	Auth3.idr	/^  verifiedIndex : (n : Nat) -> (clientCert : Client List a) -> (serverProof : Proof a) -> Maybe a$/;"	d
+verifiedSix	Auth3.idr	/^  verifiedSix : Maybe Int$/;"	d
+verifiedString	Auth.idr	/^  verifiedString : Maybe String$/;"	d
+verifier	Auth.idr	/^  verifier : (SecureHashable String, Encodable a) => a -> Verifier Hash$/;"	d
 verify	Auth1.idr	/^  verify : Hashable b => Proof b -> Hash -> Maybe (Proof b, b)$/;"	d
 verify	Auth2.idr	/^  verify : Hashable b => Proof b -> Hash -> Maybe (Proof b, b)$/;"	d
 watch	watch_and_learn.sh	/^function watch() {$/;"	f
 x	Auth.idr	/^  x :: Nil = Cons x Nil$/;"	d
-x	Auth.idr	/^  x :: xs@(Cons y z) = Cons x xs$/;"	d
+x	Auth.idr	/^  x :: xs = Cons x xs $/;"	d
+x	Auth3.idr	/^  x :: Nil = Cons x Nil$/;"	d
+x	Auth3.idr	/^  x :: xs@(Cons y z) = Cons x xs$/;"	d
+x	Auth4.idr	/^  x :: Nil = Cons x Nil$/;"	d
+x	Auth4.idr	/^  x :: xs@(Cons y z) = Cons x xs$/;"	d
+||	Auth.idr	/^  ||| (Foorp) and package it up as a Proof to send$/;"	c
+||	Auth.idr	/^  ||| Create a prover for the given encodable type.$/;"	c
+||	Auth.idr	/^  ||| Create a verifier for the given encodable type.$/;"	c
 ||	Auth.idr	/^  ||| Foorp is a reversed Proof stream.$/;"	c
+||	Auth.idr	/^  ||| Take the reversed proof output from a prover$/;"	c
+||	Auth.idr	/^  ||| to a Verifier.$/;"	c
+||	Auth3.idr	/^  ||| Foorp is a reversed Proof stream.$/;"	c
+||	Auth4.idr	/^  ||| Foorp is a reversed Proof stream.$/;"	c

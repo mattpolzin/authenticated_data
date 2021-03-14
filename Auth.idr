@@ -71,88 +71,88 @@ interface Monad m => Authenticated m (0 elem : Type -> Type) where
   unauth : Encodable a => m (elem a) -> m a
 
 export
-record Prover a where
-  constructor MkProver
+record ProverM a where
+  constructor MkProverM
   runProver : Foorp -> (Foorp, a)
 
-||| Take the reversed proof output from a prover
-||| (Foorp) and package it up as a Proof to send
-||| to a Verifier.
-export
-packageProof : (Foorp, (Hash, a)) -> (Proof, a)
-packageProof = bimap fromFoorp snd
+public export
+0 Prover : Type -> Type
+Prover a = ProverM (Hash, a)
 
 export
-Functor Prover where
-  map f (MkProver runProver) = MkProver $ \foorp => 
+Functor ProverM where
+  map f (MkProverM runProver) = MkProverM $ \foorp => 
                                  let (foorp', x) = runProver foorp
                                  in
                                      (foorp', f x)
 
-bindp : Prover a -> (a -> Prover b) -> Prover b
-bindp (MkProver runProver) f = MkProver $ \foorp => 
+bindp : ProverM a -> (a -> ProverM b) -> ProverM b
+bindp (MkProverM runProver) f = MkProverM $ \foorp => 
                                  let (foorp', x) = runProver foorp
                                      (foorp'', x') = (f x).runProver foorp'
                                  in
                                      (foorp'', x')
 
 export
-[ProverAp] Applicative Prover where
-  pure x = MkProver $ \foorp => (foorp, x)
+[ProverAp] Applicative ProverM where
+  pure x = MkProverM $ \foorp => (foorp, x)
   f <*> p = bindp f $ \f' => 
-              bindp p $ \p' => MkProver $ \foorp => (foorp, f' p')
+              bindp p $ \p' => MkProverM $ \foorp => (foorp, f' p')
 
 export
-Monad Prover using ProverAp where
+Monad ProverM using ProverAp where
   (>>=) = bindp
 
 export
-[ProverAuth] SecureHashable String => Authenticated Prover (Hash,) where
-  auth x = MkProver $ \foorp => 
+[ProverAuth] SecureHashable String => Authenticated ProverM (Hash,) where
+  auth x = MkProverM $ \foorp => 
              let encodedX = encode x
                  hashed = hash encodedX 
              in 
                  (foorp, (hashed, x))
 
-  unauth (MkProver runProver) = MkProver $ \foorp =>
+  unauth (MkProverM runProver) = MkProverM $ \foorp =>
                                   let (foorp', (_, x)) = runProver foorp
                                   in
                                       (foorp', x)
 
-record Verifier a where
-  constructor MkVerifier
+record VerifierM a where
+  constructor MkVerifierM
   runVerifier : Proof -> Maybe (Proof, a)
 
+public export
+0 Verifier : Type
+Verifier = VerifierM Hash
 
 export
-Functor Verifier where
-  map f (MkVerifier runVerifier) = MkVerifier $ \proof => 
+Functor VerifierM where
+  map f (MkVerifierM runVerifier) = MkVerifierM $ \proof => 
                                      do (proof', x) <- runVerifier proof
                                         Just (proof', f x)
 
-bindv : Verifier a -> (a -> Verifier b) -> Verifier b
-bindv (MkVerifier runVerifier) f = MkVerifier $ \proof => 
+bindv : VerifierM a -> (a -> VerifierM b) -> VerifierM b
+bindv (MkVerifierM runVerifier) f = MkVerifierM $ \proof => 
                                      do (proof', x) <- runVerifier proof
                                         (f x).runVerifier proof'
 
 export
-[VerifierAp] Applicative Verifier where
-  pure x = MkVerifier $ \proof => Just (proof, x)
+[VerifierAp] Applicative VerifierM where
+  pure x = MkVerifierM $ \proof => Just (proof, x)
   f <*> p = bindv f $ \f' => 
-              bindv p $ \p' => MkVerifier $ \proof => Just (proof, f' p')
+              bindv p $ \p' => MkVerifierM $ \proof => Just (proof, f' p')
 
 export
-Monad Verifier using VerifierAp where
+Monad VerifierM using VerifierAp where
   (>>=) = bindv
 
 export
-[VerifierAuth] SecureHashable String => Authenticated Verifier (const Hash) where
-  auth x = MkVerifier $ \proof => 
+[VerifierAuth] SecureHashable String => Authenticated VerifierM (const Hash) where
+  auth x = MkVerifierM $ \proof => 
              let hashed = (hash x) 
              in 
                  Just (proof, hashed)
 
-  unauth (MkVerifier runVerifier) = MkVerifier $ \proof =>
+  unauth (MkVerifierM runVerifier) = MkVerifierM $ \proof =>
                                       (uncurry checkHashed) =<< runVerifier proof
     where
       checkHashed : Proof -> Hash -> Maybe (Proof, a)
@@ -162,11 +162,25 @@ export
                                                 False => Nothing
 
 namespace Prover
-  
+  ||| Create a prover for the given encodable type.
+  export
+  prover : (SecureHashable String, Encodable a) => a -> Prover a
+  prover x = auth x @{ProverAuth}
+
+  ||| Take the reversed proof output from a prover
+  ||| (Foorp) and package it up as a Proof to send
+  ||| to a Verifier.
+  export
+  packageProof : (Foorp, (Hash, a)) -> (Proof, a)
+  packageProof = bimap fromFoorp snd
+
 namespace Verifier
+  ||| Create a verifier for the given encodable type.
+  export
+  verifier : (SecureHashable String, Encodable a) => a -> Verifier
+  verifier x = auth x @{VerifierAuth}
 
 namespace StringTest
-
   SecureHashable String where
     hash x = x ++ x
 
@@ -175,20 +189,16 @@ namespace StringTest
     decode = reverse
 
   export
-  str : Authenticated m elem => m (elem String)
-  str = auth "hello"
+  str : String
+  str = "hello"
 
   export
-  authedString : Authenticated m elem => m (elem String) -> m (Maybe String)
-  authedString x = Just <$> unauth x
+  serverString : Prover String
+  serverString = prover str
 
   export
-  serverString : Prover (Hash, String)
-  serverString = str @{ProverAuth}
-
-  export
-  clientString : Verifier Hash
-  clientString = str @{VerifierAuth}
+  clientString : Verifier
+  clientString = verifier str 
 
   export
   verifiedString : Maybe String
