@@ -26,10 +26,16 @@ public export
 interface SecureHashable ty where
   hash : ty -> Hash
 
-public export
-interface SecureHashable a => Encodable a where
-  encode : a -> String
-  decode : String -> a
+namespace Encodable
+  public export
+  interface Encodable a where
+    encode : a -> String
+    decode : String -> a
+
+  public export
+  Encodable String where
+    encode = id
+    decode = id
 
 ||| Proof is a list/stream of Strings that can be
 ||| decoded to a particular type.
@@ -66,9 +72,11 @@ namespace ReversedProof
   fromFoorp (Cons x xs) = fromFoorp' x xs Nil
 
 public export
-interface Monad m => Authenticated m (0 ety : Type -> Type) where
-  auth   : Encodable a => a -> m (ety a)
-  unauth : Encodable a => m (ety a) -> m a
+interface Monad m => Authenticated m (0 ety : Type -> Type) | m where
+  auth   : (SecureHashable a, Encodable a) => a -> ety a
+  unauth : Encodable a => ety a -> m a
+  encodeA : Encodable a => ety a -> String
+  decodeA : (SecureHashable a, Encodable a) => String -> ety a
 
 export
 record ProverM a where
@@ -105,139 +113,174 @@ Monad ProverM using ProverAp where
 
 export
 [ProverAuth] SecureHashable String => Authenticated ProverM (Hash,) where
-  auth x = MkProverM $ \foorp => 
-             let encodedX = encode x
-                 hashed = hash encodedX 
-             in 
-                 (foorp, (hashed, x))
+  auth x = (hash (encode x), x)
 
-  unauth (MkProverM runProver) = MkProverM $ \foorp =>
-                                  let (foorp', (_, x)) = runProver foorp
-                                  in
-                                      (foorp', x)
+  unauth (_, x) = MkProverM $ \foorp => ((encode x) :: foorp, x)
 
-%hint
-public export
-ProverAuthHint : (SecureHashable String, Encodable a) => Authenticated ProverM (Hash,)
-ProverAuthHint = ProverAuth
+  encodeA (_, x) = encode x
+  decodeA = (mapFst hash) . dup . (the (String -> a) decode)
 
-record VerifierM decoded a where
+record VerifierM a where
   constructor MkVerifierM
   runVerifier : Proof -> Maybe (Proof, a)
 
+||| A Verifier for the given type. The type is just a marker.
 public export
 0 Verifier : Type -> Type
-Verifier a = VerifierM a Hash
+Verifier a = VerifierM Hash
 
 export
-Functor (VerifierM d) where
+Functor VerifierM where
   map f (MkVerifierM runVerifier) = MkVerifierM $ \proof => 
                                      do (proof', x) <- runVerifier proof
                                         Just (proof', f x)
 
-bindv : VerifierM d a -> (a -> VerifierM d b) -> VerifierM d b
+bindv : VerifierM a -> (a -> VerifierM b) -> VerifierM b
 bindv (MkVerifierM runVerifier) f = MkVerifierM $ \proof => 
                                      do (proof', x) <- runVerifier proof
                                         (f x).runVerifier proof'
 
 export
-[VerifierAp] Applicative (VerifierM d) where
+[VerifierAp] Applicative VerifierM where
   pure x = MkVerifierM $ \proof => Just (proof, x)
   f <*> p = bindv f $ \f' => 
               bindv p $ \p' => MkVerifierM $ \proof => Just (proof, f' p')
 
 export
-Monad (VerifierM d) using VerifierAp where
+Monad VerifierM using VerifierAp where
   (>>=) = bindv
 
 export
-[VerifierAuth] SecureHashable String => Authenticated (VerifierM d) (const Hash) where
-  auth x = MkVerifierM $ \proof => 
-             let hashed = (hash x) 
-             in 
-                 Just (proof, hashed)
+[VerifierAuth] SecureHashable String => Authenticated VerifierM (const Hash) where
+  auth x = hash x
 
-  unauth (MkVerifierM runVerifier) = MkVerifierM $ \proof =>
-                                      (uncurry checkHashed) =<< runVerifier proof
+  unauth = MkVerifierM . checkHashed
     where
-      checkHashed : Proof -> Hash -> Maybe (Proof, a)
-      checkHashed [] hashed = Nothing
-      checkHashed (Cons x proof') hashed = case ((hash x) == hashed) of
+      checkHashed : Hash -> Proof -> Maybe (Proof, a)
+      checkHashed hashed [] = Nothing
+      checkHashed hashed (Cons x proof') = case ((hash x) == hashed) of
                                                 True  => Just (proof', decode x)
                                                 False => Nothing
 
-%hint
-public export
-VerifierAuthHint : (SecureHashable String, Encodable d) => (Encodable d, Authenticated (VerifierM d) (const Hash))
-VerifierAuthHint @{(_, e)}= (e, VerifierAuth)
+  encodeA = encode
+  decodeA = decode
 
 export
-authed : (Encodable a, Authenticated m authty) => a -> m (authty a)
-authed x @{(_, auther)} = auth x @{auther}
+authed : Authenticated m authty => (SecureHashable a, Encodable a) => a -> authty a
+authed x @{auther} = auth x @{auther}
+
+||| A type the server is holding onto but has not yet proven.
+public export
+0 Unproven : Type -> Type
+Unproven a = (Hash, a)
+
+||| A type the server has proven for delivery to the client.
+0 Proven : Type -> Type
+Proven a = (Proof, a)
+
+||| A type the client has certified. The type param is just a marker.
+public export
+0 Certified : Type -> Type
+Certified a = Hash
 
 namespace Prover
-  ||| Create a prover for the given encodable type.
+  ||| Create an unproven type for the given encodable type.
   export
-  prover : (SecureHashable String, Encodable a) => a -> Prover a
-  prover = authed
+  unproven : SecureHashable String => SecureHashable a => Encodable a => a -> Unproven a
+  unproven = authed @{ProverAuth}
+
+  ||| Prove something from the server's perspective.
+  export
+  prove : SecureHashable String => Encodable a => Unproven a -> (Foorp, a)
+  prove unproven = runProver (unauth unproven @{ProverAuth}) empty
 
   ||| Take the reversed proof output from a prover
   ||| (Foorp) and package it up as a Proof to send
   ||| to a Verifier.
   export
-  packageProof : (Foorp, (Hash, a)) -> (Proof, a)
-  packageProof = bimap fromFoorp snd
+  packageProof : (Foorp, a) -> Proven a
+  packageProof = mapFst fromFoorp
 
 namespace Verifier
-  ||| Create a verifier for the given encodable type.
+  ||| Create a certified type for the given encodable type.
   export
-  verifier : (SecureHashable String, Encodable a) => a -> Verifier a
-  verifier = authed @{VerifierAuthHint}
+  certified : SecureHashable String => SecureHashable a => Encodable a => a -> Certified a
+  certified = authed @{VerifierAuth}
+
+  ||| Verify proof provided by the sever against the certification
+  ||| stored clientside.
+  export
+  verify : SecureHashable String => Encodable a => Certified a -> Proven a -> Maybe a
+  verify hashed (proof, x) = snd <$> (runVerifier (unauth hashed @{VerifierAuth}) proof)
+
+--
+-- Test Cases
+--
 
 namespace StringTest
   SecureHashable String where
     hash x = x ++ x
-
-  Encodable String where
-    encode = reverse
-    decode = reverse
 
   export
   str : String
   str = "hello"
 
   export
-  serverString : Prover String
-  serverString = prover str
+  serverString : Unproven String
+  serverString = unproven str
 
   export
-  clientString : Verifier String
-  clientString = verifier str 
+  clientString : Certified String
+  clientString = certified str 
 
   export
   verifiedString : Maybe String
-  verifiedString = let serverside = runProver serverString empty 
+  verifiedString = let serverside = prove serverString
                        payload = packageProof serverside
                    in 
-                       do (Nil, _) <- runVerifier clientString (fst payload)
-                            |  _ => Nothing -- there was some proof left over unexpectedly
-                          pure (snd payload)
+                       verify clientString payload
 
 namespace ListTest
+  SecureHashable String where
+    hash x = x ++ x
+
   export
   list1 : List String
   list1 = ["hello", "world", "good", "day"]
 
   data L : (0 m : Type -> Type) -> (0 authty : Type -> Type) -> Type -> Type where
     Nil  : L m authty a
-    Cons : m (authty a) -> (L m authty a) -> L m authty a
+    Cons : a -> (m . authty) (L m authty a) -> L m authty a
+
+  mutual 
+    SecureHashable a => SecureHashable (L m authty a) where
+      hash [] = ""
+      hash (Cons x xs) = (hash x) <+> ?hdasd
+
+    Encodable a => Encodable (L m authty a) where
+      encode = ?hasda2
+      decode = ?haasss3
+
 
   0 AuthList : Authenticated m authty => Type -> Type
-  AuthList a = m (authty (L m authty a))
+  AuthList a = L m authty a
 
---   toAuthList : Authenticated m ety e} -> List a -> AuthList a @{auther}
---   toAuthList [] = auth ListTest.Nil @{auther}
---   toAuthList (x :: xs) = ?toAuthList_rhs_2
+  -- TODO: investiage why Idris cannot find the "auther" later in the same signature unless
+  --       explicitly told to use it.
+--   export
+--   toAuthList : Encodable a => {auto auther : Authenticated m authty} -> List a -> AuthList a @{auther}
+--   toAuthList [] = ListTest.Nil
+--   toAuthList (x :: xs) = Cons x $ auth (toAuthList xs)
+
+  -- TODO: here's an annoyance to look into: the need to specify the ProverAuth explicitly in the signature
+  --       and in the body.
+--   export
+--   serverList : AuthList String @{ProverAuth}
+--   serverList = toAuthList list1 @{%search} @{ProverAuth}
+-- 
+--   export
+--   clientList : AuthList String @{VerifierAuth}
+--   clientList = toAuthList list1 @{%search} @{VerifierAuth}
 
 --   index : (n : Nat) -> L m ety a -> Maybe a
 --   index 0 [] = Nothing
@@ -247,5 +290,5 @@ namespace ListTest
 
 --   export
 --   authedIndex : {auto auth : Authenticated m elem} -> (n : Nat) -> AuthList a @{auth} -> m (Maybe a)
---   authedIndex n xs @{e} = unauth xs @{e} >>= \xs' => pure $ index n xs'
+--   authedIndex n xs = ?h
 
