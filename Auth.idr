@@ -72,9 +72,6 @@ namespace ReversedProof
   fromFoorp Nil = Nil
   fromFoorp (Cons x xs) = fromFoorp' x xs Nil
 
-public export
-data AuthMode = ServerAuth | ClientAuth
-
 ||| A type the server is holding onto but has not yet proven.
 public export
 0 Unproven : Type -> Type
@@ -90,32 +87,43 @@ public export
 Certified a = Hash
 
 public export
-0 AuthModeType : AuthMode -> Type -> Type
-AuthModeType ServerAuth = Unproven
-AuthModeType ClientAuth = Certified
+interface AuthType (0 authty : Type -> Type) where
+  hashA : SecureHashable a => authty a -> Hash
+  encodeA : Encodable a => authty a -> String
+  decodeA : (SecureHashable a, Encodable a) => String -> authty a
 
 public export
-SecureHashable a => SecureHashable (Unproven a) where
-  hash (_, x) = hash x
+(SecureHashable a, AuthType authty) => SecureHashable (authty a) where
+  hash = hashA
 
 public export
-SecureHashable a => SecureHashable (Certified a) where
-  hash = id
+(SecureHashable a, Encodable a, AuthType authty) => Encodable (authty a) where
+  encode = encodeA
+  decode = decodeA
 
 public export
-(SecureHashable a, Encodable a) => Encodable (Unproven a) where
-  encode (_, x) = encode x
-  decode = (mapFst hash) . dup . (the (String -> a) decode)
+AuthType Unproven where
+  hashA (_, x)= hash x
 
--- currently covered by (Encodable String) until or unless
--- Hash becomes something other than an alias for String.
--- public export
--- Encodable a => Encodable (Certified a) where
+  -- TODO: should it encode as if just its value type?
+  encodeA (_, x) = encode x
+
+  decodeA x = let decoded = decode x
+              in
+                  (hash decoded, decoded)
 
 public export
-interface Monad m => Authenticated m (0 am : AuthMode) | m where
-  auth   : (SecureHashable a, Encodable a) => a -> (AuthModeType am) a
-  unauth : Encodable a => (AuthModeType am) a -> m a
+AuthType Certified where
+  hashA = id
+
+  encodeA = encode
+
+  decodeA = decode
+
+public export
+interface (Monad m, AuthType authty) => Authenticated m authty | m where
+  auth   : (SecureHashable a, Encodable a) => a -> authty a
+  unauth : Encodable a => authty a -> m a
 
 --
 -- Prover
@@ -155,7 +163,7 @@ Monad ProverM using ProverAp where
   (>>=) = bindp
 
 export
-[ProverAuth] SecureHashable String => Authenticated ProverM ServerAuth where
+[ProverAuth] SecureHashable String => Authenticated ProverM Unproven where
   auth x = (hash (encode x), x)
 
   unauth (_, x) = MkProverM $ \foorp => ((encode x) :: foorp, x)
@@ -196,7 +204,7 @@ Monad VerifierM using VerifierAp where
   (>>=) = bindv
 
 export
-[VerifierAuth] SecureHashable String => Authenticated VerifierM ClientAuth where
+[VerifierAuth] SecureHashable String => Authenticated VerifierM Certified where
   auth x = hash x
 
   unauth = MkVerifierM . checkHashed
@@ -207,33 +215,23 @@ export
                                                 True  => Just (proof', decode x)
                                                 False => Nothing
 
-export
-authed : Authenticated m mode => (SecureHashable a, Encodable a) => a -> (AuthModeType mode) a
-authed x @{auther} = auth x @{auther}
-
 namespace Prover
   ||| Create an unproven type for the given encodable type.
   export
   unproven : SecureHashable String => SecureHashable a => Encodable a => a -> Unproven a
-  unproven = authed @{ProverAuth}
+  unproven = auth @{ProverAuth}
 
   ||| Prove something from the server's perspective.
   export
-  prove : SecureHashable String => Encodable a => Unproven a -> (Foorp, a)
-  prove unproven = runProver (unauth unproven @{ProverAuth}) empty
-
-  ||| Take the reversed proof output from a prover
-  ||| (Foorp) and package it up as a Proof to send
-  ||| to a Verifier.
-  export
-  packageProof : (Foorp, a) -> Proven a
-  packageProof = mapFst fromFoorp
+  prove : SecureHashable String => Encodable a => Unproven a -> (Proof, a)
+  prove unproven = (mapFst fromFoorp) $ 
+                     runProver (unauth unproven @{ProverAuth}) empty
 
 namespace Verifier
   ||| Create a certified type for the given encodable type.
   export
   certified : SecureHashable String => SecureHashable a => Encodable a => a -> Certified a
-  certified = authed @{VerifierAuth}
+  certified = auth @{VerifierAuth}
 
   ||| Verify proof provided by the sever against the certification
   ||| stored clientside.
@@ -264,9 +262,8 @@ namespace StringTest
   export
   verifiedString : Maybe String
   verifiedString = let serverside = prove serverString
-                       payload = packageProof serverside
                    in 
-                       verify clientString payload
+                       verify clientString serverside
 
 namespace ListTest
   SecureHashable String where
@@ -276,51 +273,36 @@ namespace ListTest
   list1 : List String
   list1 = ["hello", "world", "good", "day"]
 
-  data L : (0 m : Type -> Type) -> (0 mode : AuthMode) -> Type -> Type where
-    Nil  : L m mode a
-    Cons : a -> (AuthModeType mode) (L m mode a) -> L m mode a
+  data L : (0 m : Type -> Type) -> (0 authty : Type -> Type) -> Type -> Type where
+    Nil  : L m authty a
+    Cons : a -> authty (L m authty a) -> L m authty a
 
-  [SecHashS] (SecureHashable a, SecureHashable (Unproven a)) => SecureHashable (L m ServerAuth a) where
+  (SecureHashable a, AuthType authty) => SecureHashable (L m authty a) where
     hash [] = ""
-    hash (Cons x (_, xs)) = (hash x) <+> (hash xs)
+    hash (Cons x xs) = assert_total $ hash x <+> (hash xs)
 
-  [SecHashC] SecureHashable a => SecureHashable (L m ClientAuth a) where
-    hash [] = ""
-    hash (Cons x hashed) = (hash x) <+> hashed
-
-  [EncS] Encodable a => Encodable (L m ServerAuth a) where
+  (SecureHashable a, Encodable a, AuthType authty) => Encodable (L m authty a) where
     encode [] = ""
-    encode (Cons x (_, xs)) = (encode x) <+> "," <+> (encode xs)
+    encode (Cons x xs) = assert_total $ encode x <+> "," <+> (encode xs)
 
-    decode = decodeEach . reverse . toList . (map pack) . (split (== ',')) . unpack 
+    decode = decodeEach . reverse . toList . (map pack) . (split (== ',')) . unpack
       where
-        decodeEach : List String -> L m ServerAuth a
+        decodeEach : List String -> L m authty a
         decodeEach [] = Nil
-        decodeEach (x :: xs) = let rest = decodeEach xs
-                               in
-                                   Cons (decode x) (hash (encode rest), rest)
+        decodeEach (x :: xs) = assert_total $ 
+                                 let rest = (concat . (intersperse "m")) (reverse xs)
+                                 in
+                                     Cons (decode x) (decode rest)
 
-  [EncC] (SecureHashable a, Encodable a) => Encodable (L m ClientAuth a) where
-    encode [] = ""
-    encode (Cons x y) = (encode x) <+> "|" <+> y
-
-    decode = decodeEach . reverse . toList . (map pack) . (split (== '|')) . unpack
-      where
-        decodeEach : List String -> L m ClientAuth a
-        decodeEach [] = Nil
-        decodeEach (x :: xs) = Cons (decode x) (hash (decodeEach xs) @{SecHashC})
-
-
-  0 AuthList : Authenticated m mode => Type -> Type
-  AuthList a = L m mode a
+  0 AuthList : Authenticated m authty => Type -> Type
+  AuthList a = authty (L m authty a)
 
   -- TODO: investiage why Idris cannot find the "auther" later in the same signature unless
   --       explicitly told to use it.
   export
-  toAuthList : (SecureHashable a, Encodable a) => {mode : AuthMode} -> {auto auther : Authenticated m mode} -> List a -> AuthList a @{auther}
-  toAuthList {mode} [] = ListTest.Nil
-  toAuthList {mode = ServerAuth} (x :: xs) = Cons x (auth (toAuthList xs) @{auther} @{(SecHashS, EncS)})
-  toAuthList {mode = ClientAuth} (x :: xs) = Cons x (auth (toAuthList xs {auther}) @{auther} @{(SecHashC, EncC)})
+  toAuthList : (SecureHashable a, Encodable a, AuthType authty) => {auto auther : Authenticated m authty} -> List a -> AuthList a @{auther}
+  toAuthList [] = auth Nil @{auther}
+  toAuthList (x :: xs) = auth (Cons x (toAuthList xs)) @{auther}
 
   -- TODO: here's an annoyance to look into: the need to specify the ProverAuth explicitly in the signature
   --       and in the body.
@@ -333,9 +315,42 @@ namespace ListTest
   clientList = toAuthList list1 @{%search} @{VerifierAuth}
 
   export
-  authedIndex : {auto auth : Authenticated m elem} -> (n : Nat) -> AuthList a @{auth} -> m (Maybe a)
-  authedIndex 0 [] = pure Nothing
-  authedIndex 0 (Cons x y) = pure $ Just x
-  authedIndex (S k) [] = pure Nothing
-  authedIndex (S k) (Cons _ xs) = ?h_2
+  authedIndex : (SecureHashable a, Encodable a) => {auto auther : Authenticated m authty} -> (n : Nat) -> AuthList a @{auther} -> m (Maybe a)
+
+  authedIndex' : (SecureHashable a, Encodable a) => {auto auther : Authenticated m authty} -> (n : Nat) -> L m authty a -> m (Maybe a)
+  authedIndex' 0 [] = pure Nothing
+  authedIndex' 0 (Cons x _) = pure $ Just x
+  authedIndex' (S k) [] = pure Nothing
+  authedIndex' (S k) (Cons _ xs) = authedIndex k xs
+
+-- authedIndex forward-declared above. 
+  authedIndex n xs = (unauth xs) >>= (authedIndex' n)
+
+  export
+  provenIdxZero : Proven (Maybe String)
+  provenIdxZero = (mapFst fromFoorp) $ 
+                    runProver (authedIndex 0 serverList @{%search} @{ProverAuth}) empty
+
+  export
+  certifiedIdxZero : Certified (Maybe String)
+  certifiedIdxZero = ?h
+
+  export
+  verifiedIdxZero : Maybe String
+  verifiedIdxZero = snd =<< (runVerifier (authedIndex 0 clientList {a=String} @{%search} @{VerifierAuth}) (fst provenIdxZero))
+
+--   export
+--   authedIdxZero : Maybe String
+--   authedIdxZero = authedIndex 0 serverList
+
+  
+
+namespace TreeTest
+  SecureHashable String where
+    hash x = x ++ x
+
+  data Tree : (0 m : Type -> Type) -> a -> Type where
+    Leaf : Authenticated m authty => a -> Tree m a 
+    Node : Authenticated m authty => authty (Tree m a) -> authty (Tree m a) -> Tree m a
+
 
