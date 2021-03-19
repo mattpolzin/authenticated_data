@@ -17,6 +17,8 @@ import Data.List
 import Data.List1
 import Control.Monad.Identity
 
+import Debug.Trace
+
 %default total
 
 public export
@@ -105,9 +107,9 @@ public export
 AuthType Unproven where
   hashA (_, x)= hash x
 
-  -- TODO: should it encode as if just its value type?
-  encodeA (_, x) = encode x
+  encodeA (hashed, _) = hashed
 
+  -- TODO: decode not valid?
   decodeA x = let decoded = decode x
               in
                   (hash decoded, decoded)
@@ -116,9 +118,9 @@ public export
 AuthType Certified where
   hashA = id
 
-  encodeA = encode
+  encodeA = id
 
-  decodeA = decode
+  decodeA = id
 
 public export
 interface (Monad m, AuthType authty) => Authenticated m authty | m where
@@ -205,13 +207,14 @@ Monad VerifierM using VerifierAp where
 
 export
 [VerifierAuth] SecureHashable String => Authenticated VerifierM Certified where
-  auth x = hash x
+  auth x = hash (encode x)
 
   unauth = MkVerifierM . checkHashed
     where
       checkHashed : Hash -> Proof -> Maybe (Proof, a)
-      checkHashed hashed [] = Nothing
-      checkHashed hashed (Cons x proof') = case ((hash x) == hashed) of
+      checkHashed hashed [] = trace "out of proof" $ Nothing
+      checkHashed hashed (Cons x proof') = trace ("checking hash " ++ hashed ++ " against " ++ (hash x)) $
+                                           case ((hash x) == hashed) of
                                                 True  => Just (proof', decode x)
                                                 False => Nothing
 
@@ -283,14 +286,18 @@ namespace ListTest
 
   (SecureHashable a, Encodable a, AuthType authty) => Encodable (L m authty a) where
     encode [] = ""
-    encode (Cons x xs) = assert_total $ encode x <+> "," <+> (encode xs)
+    encode (Cons x xs) = assert_total $ encode x <+> let rest = (encode xs)
+                                                     in
+                                                         if rest == ""
+                                                            then ""
+                                                            else "," <+> rest
 
-    decode = decodeEach . reverse . toList . (map pack) . (split (== ',')) . unpack
+    decode = decodeEach . toList . (map pack) . (split (== ',')) . unpack
       where
         decodeEach : List String -> L m authty a
         decodeEach [] = Nil
         decodeEach (x :: xs) = assert_total $ 
-                                 let rest = (concat . (intersperse "m")) (reverse xs)
+                                 let rest = (concat . (intersperse ",")) xs
                                  in
                                      Cons (decode x) (decode rest)
 
@@ -326,18 +333,18 @@ namespace ListTest
 -- authedIndex forward-declared above. 
   authedIndex n xs = (unauth xs) >>= (authedIndex' n)
 
+  -- TODO: iiinteresting. so, this kind of works but I ended up with an example that verifies the server has
+  --       gone _at least as far_ into the list as the requested index rather than _exactly as far_ into the
+  --       list.
+
   export
   provenIdxZero : Proven (Maybe String)
   provenIdxZero = (mapFst fromFoorp) $ 
-                    runProver (authedIndex 0 serverList @{%search} @{ProverAuth}) empty
-
-  export
-  certifiedIdxZero : Certified (Maybe String)
-  certifiedIdxZero = ?h
+                    runProver (authedIndex 2 serverList @{%search} @{ProverAuth}) empty
 
   export
   verifiedIdxZero : Maybe String
-  verifiedIdxZero = snd =<< (runVerifier (authedIndex 0 clientList {a=String} @{%search} @{VerifierAuth}) (fst provenIdxZero))
+  verifiedIdxZero = snd =<< (runVerifier (authedIndex 2 clientList {a=String} @{%search} @{VerifierAuth}) (fst provenIdxZero))
 
 --   export
 --   authedIdxZero : Maybe String
@@ -353,4 +360,5 @@ namespace TreeTest
     Leaf : Authenticated m authty => a -> Tree m a 
     Node : Authenticated m authty => authty (Tree m a) -> authty (Tree m a) -> Tree m a
 
-
+test : IO ()
+test = printLn $ verifiedIdxZero
