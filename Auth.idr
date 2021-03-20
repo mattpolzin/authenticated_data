@@ -212,9 +212,8 @@ export
   unauth = MkVerifierM . checkHashed
     where
       checkHashed : Hash -> Proof -> Maybe (Proof, a)
-      checkHashed hashed [] = trace "out of proof" $ Nothing
-      checkHashed hashed (Cons x proof') = trace ("checking hash " ++ hashed ++ " against " ++ (hash x)) $
-                                           case ((hash x) == hashed) of
+      checkHashed hashed [] = Nothing
+      checkHashed hashed (Cons x proof') = case ((hash x) == hashed) of
                                                 True  => Just (proof', decode x)
                                                 False => Nothing
 
@@ -224,11 +223,16 @@ namespace Prover
   unproven : SecureHashable String => SecureHashable a => Encodable a => a -> Unproven a
   unproven = auth @{ProverAuth}
 
-  ||| Prove something from the server's perspective.
+  ||| Prove any authenticated operation from the server's perspective.
   export
-  prove : SecureHashable String => Encodable a => Unproven a -> (Proof, a)
-  prove unproven = (mapFst fromFoorp) $ 
-                     runProver (unauth unproven @{ProverAuth}) empty
+  prove : ProverM a -> Proven a
+  prove prover = (mapFst fromFoorp) $
+                   runProver prover empty
+
+  ||| Prove a straight-forward unauth from the server's perspective.
+  export
+  prove' : SecureHashable String => Encodable a => Unproven a -> Proven a
+  prove' unproven = prove $ unauth unproven @{ProverAuth}
 
 namespace Verifier
   ||| Create a certified type for the given encodable type.
@@ -236,11 +240,15 @@ namespace Verifier
   certified : SecureHashable String => SecureHashable a => Encodable a => a -> Certified a
   certified = auth @{VerifierAuth}
 
+  ||| Verify a proven value provided by the server.
+  export verify : VerifierM (Maybe a) -> Proven (Maybe a) -> Maybe a
+  verify verifier proven = snd =<< (runVerifier verifier (fst proven))
+
   ||| Verify proof provided by the sever against the certification
   ||| stored clientside.
   export
-  verify : SecureHashable String => Encodable a => Certified a -> Proven a -> Maybe a
-  verify hashed (proof, x) = snd <$> (runVerifier (unauth hashed @{VerifierAuth}) proof)
+  verify' : SecureHashable String => Encodable a => Certified a -> Proven a -> Maybe a
+  verify' hashed proven = verify (Just <$> (unauth hashed @{VerifierAuth})) (mapSnd Just proven)
 
 --
 -- Test Cases
@@ -264,27 +272,26 @@ namespace StringTest
 
   export
   verifiedString : Maybe String
-  verifiedString = let serverside = prove serverString
+  verifiedString = let serverside = prove' serverString
                    in 
-                       verify clientString serverside
+                       verify' clientString serverside
 
 namespace ListTest
   SecureHashable String where
     hash x = x ++ x
 
-  export
   list1 : List String
   list1 = ["hello", "world", "good", "day"]
 
-  data L : (0 m : Type -> Type) -> (0 authty : Type -> Type) -> Type -> Type where
-    Nil  : L m authty a
-    Cons : a -> authty (L m authty a) -> L m authty a
+  data L : (0 authty : Type -> Type) -> Type -> Type where
+    Nil  : L authty a
+    Cons : a -> authty (L authty a) -> L authty a
 
-  (SecureHashable a, AuthType authty) => SecureHashable (L m authty a) where
+  (SecureHashable a, AuthType authty) => SecureHashable (L authty a) where
     hash [] = ""
     hash (Cons x xs) = assert_total $ hash x <+> (hash xs)
 
-  (SecureHashable a, Encodable a, AuthType authty) => Encodable (L m authty a) where
+  (SecureHashable a, Encodable a, AuthType authty) => Encodable (L authty a) where
     encode [] = ""
     encode (Cons x xs) = assert_total $ encode x <+> let rest = (encode xs)
                                                      in
@@ -294,37 +301,32 @@ namespace ListTest
 
     decode = decodeEach . toList . (map pack) . (split (== ',')) . unpack
       where
-        decodeEach : List String -> L m authty a
+        decodeEach : List String -> L authty a
         decodeEach [] = Nil
         decodeEach (x :: xs) = assert_total $ 
                                  let rest = (concat . (intersperse ",")) xs
                                  in
                                      Cons (decode x) (decode rest)
 
-  0 AuthList : Authenticated m authty => Type -> Type
-  AuthList a = authty (L m authty a)
+  0 AuthList : (0 authty : Type -> Type) -> Type -> Type
+  AuthList authty a = authty (L authty a)
 
-  -- TODO: investiage why Idris cannot find the "auther" later in the same signature unless
-  --       explicitly told to use it.
-  export
-  toAuthList : (SecureHashable a, Encodable a, AuthType authty) => {auto auther : Authenticated m authty} -> List a -> AuthList a @{auther}
+  toAuthList : {auto auther : Authenticated m authty} -> (SecureHashable a, Encodable a) => List a -> AuthList authty a
   toAuthList [] = auth Nil @{auther}
-  toAuthList (x :: xs) = auth (Cons x (toAuthList xs)) @{auther}
-
-  -- TODO: here's an annoyance to look into: the need to specify the ProverAuth explicitly in the signature
-  --       and in the body.
-  export
-  serverList : AuthList String @{ProverAuth}
-  serverList = toAuthList list1 @{%search} @{ProverAuth}
+  toAuthList (x :: xs) = auth (Cons x (toAuthList xs @{auther})) @{auther}
 
   export
-  clientList : AuthList String @{VerifierAuth}
-  clientList = toAuthList list1 @{%search} @{VerifierAuth}
+  serverList : AuthList Unproven String
+  serverList = toAuthList list1 @{ProverAuth}
 
   export
-  authedIndex : (SecureHashable a, Encodable a) => {auto auther : Authenticated m authty} -> (n : Nat) -> AuthList a @{auther} -> m (Maybe a)
+  clientList : AuthList Certified String
+  clientList = toAuthList list1 @{VerifierAuth}
 
-  authedIndex' : (SecureHashable a, Encodable a) => {auto auther : Authenticated m authty} -> (n : Nat) -> L m authty a -> m (Maybe a)
+  export
+  authedIndex : {auto auther : Authenticated m authty} -> (SecureHashable a, Encodable a) => (n : Nat) -> AuthList authty a -> m (Maybe a)
+
+  authedIndex' : (SecureHashable a, Encodable a, Authenticated m authty) => (n : Nat) -> L authty a -> m (Maybe a)
   authedIndex' 0 [] = pure Nothing
   authedIndex' 0 (Cons x _) = pure $ Just x
   authedIndex' (S k) [] = pure Nothing
@@ -337,28 +339,23 @@ namespace ListTest
   --       gone _at least as far_ into the list as the requested index rather than _exactly as far_ into the
   --       list.
 
+  -- TODO: look into why this takes ages to evaluate but :exec of an expression containing it is plenty quick.
   export
-  provenIdxZero : Proven (Maybe String)
-  provenIdxZero = (mapFst fromFoorp) $ 
-                    runProver (authedIndex 2 serverList @{%search} @{ProverAuth}) empty
-
-  export
-  verifiedIdxZero : Maybe String
-  verifiedIdxZero = snd =<< (runVerifier (authedIndex 2 clientList {a=String} @{%search} @{VerifierAuth}) (fst provenIdxZero))
-
---   export
---   authedIdxZero : Maybe String
---   authedIdxZero = authedIndex 0 serverList
-
-  
+  verifiedIdx : Maybe String
+  verifiedIdx = let idx = 1
+                    serverside = prove $ authedIndex idx serverList @{ProverAuth}
+                in
+                    verify (authedIndex idx clientList @{VerifierAuth}) serverside
 
 namespace TreeTest
   SecureHashable String where
     hash x = x ++ x
 
-  data Tree : (0 m : Type -> Type) -> a -> Type where
-    Leaf : Authenticated m authty => a -> Tree m a 
-    Node : Authenticated m authty => authty (Tree m a) -> authty (Tree m a) -> Tree m a
+  data Tree : (0 authty : Type -> Type) -> a -> Type where
+    Leaf : a -> Tree authty a 
+    Node : authty (Tree authty a) -> authty (Tree authty a) -> Tree authty a
 
 test : IO ()
-test = printLn $ verifiedIdxZero
+test = printLn $ verifiedIdx
+
+
