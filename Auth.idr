@@ -15,6 +15,7 @@ import Data.DPair
 import Data.Bits
 import Data.List
 import Data.List1
+import Data.Vect
 import Control.Monad.Identity
 
 import Debug.Trace
@@ -317,7 +318,6 @@ namespace ListTest
   clientList : AuthList Certified String
   clientList = toAuthList list1 @{VerifierAuth}
 
-  export
   authedIndex : Authenticated m authty => (SecureHashable a, Encodable a) => (n : Nat) -> AuthList authty a -> m (Maybe a)
 
   authedIndex' : (SecureHashable a, Encodable a, Authenticated m authty) => (n : Nat) -> L authty a -> m (Maybe a)
@@ -335,10 +335,88 @@ namespace ListTest
 
   -- TODO: look into why this takes ages to evaluate but :exec of an expression containing it is plenty quick.
   export
-  verifiedIdx : Maybe String
-  verifiedIdx = let idx = 1
-                    serverside = prove $ authedIndex idx serverList @{ProverAuth}
-                in  verify (authedIndex idx clientList @{VerifierAuth}) serverside
+  verifiedElem : Maybe String
+  verifiedElem = let idx = 1
+                     serverside = prove $ authedIndex idx serverList @{ProverAuth}
+                 in  verify (authedIndex idx clientList @{VerifierAuth}) serverside
+
+||| A test of the AuthList; evaluating @verifiedElem@ takes forever but executing
+||| the following test is quite snappy.
+testList : IO ()
+testList = printLn $ verifiedElem
+
+namespace VectTest
+  SecureHashable String where
+    hash x = x ++ x
+
+  vect1 : Vect ? String
+  vect1 = ["hello", "world", "good", "day"]
+
+  data V : (0 authty : Type -> Type) -> Nat -> Type -> Type where
+    Nil  : V authty 0 a
+    Cons : a -> authty (V authty n a) -> V authty (S n) a
+
+  (SecureHashable a, AuthType authty) => SecureHashable (V authty n a) where
+    hash [] = ""
+    hash (Cons x xs) = assert_total $ hash x <+> (hash xs)
+
+  -- TODO: would need to make decode failable (which it really should be) so
+  --       we can talk about _trying_ to decode a vect of a certain length.
+  (SecureHashable a, Encodable a, AuthType authty) => Encodable (V authty n a) where
+--     encode [] = ""
+--     encode (Cons x xs) = assert_total $ encode x <+> let rest = (encode xs)
+--                                                      in  if rest == ""
+--                                                            then ""
+--                                                            else "," <+> rest
+-- 
+--     decode = decodeEach . toList . (map pack) . (split (== ',')) . unpack
+--       where
+--         decodeEach : Vect n String -> V authty n a
+--         decodeEach [] = Nil
+--         decodeEach (x :: xs) = assert_total $ 
+--                                  let rest = (concat . (intersperse ",")) xs
+--                                  in  Cons (decode x) (decode rest)
+
+  0 AuthVect : (0 authty : Type -> Type) -> Nat -> Type -> Type
+  AuthVect authty n a = authty (V authty n a)
+
+  toAuthVect : {auto authed : Authenticated m authty} -> (SecureHashable a, Encodable a) => Vect n a -> AuthVect authty n a
+  toAuthVect [] = auth Nil @{authed}
+  toAuthVect (x :: xs) = auth (Cons x (toAuthVect xs @{authed})) @{authed}
+
+  export
+  serverVect : AuthVect Unproven 4 String
+  serverVect = toAuthVect vect1 @{ProverAuth}
+
+  export
+  clientVect : AuthVect Certified 4 String
+  clientVect = toAuthVect vect1 @{VerifierAuth}
+
+  authedIndex : Authenticated m authty => (SecureHashable a, Encodable a) => (i : Fin n) -> AuthVect authty n a -> m (Maybe a)
+
+  authedIndex' : (SecureHashable a, Encodable a, Authenticated m authty) => (i : Fin n) -> V authty n a -> m (Maybe a)
+  authedIndex' k [] impossible
+  authedIndex' FZ (Cons x _) = pure $ Just x
+  authedIndex' (FS k) (Cons _ xs) = authedIndex k xs
+
+-- authedIndex forward-declared above. 
+  authedIndex n xs = (unauth xs) >>= (authedIndex' n)
+
+  -- TODO: iiinteresting. so, this kind of works but I ended up with an example that verifies the server has
+  --       gone _at least as far_ into the list as the requested index rather than _exactly as far_ into the
+  --       list.
+
+  -- TODO: look into why this takes ages to evaluate but :exec of an expression containing it is plenty quick.
+  export
+  verifiedElem : Maybe String
+  verifiedElem = let idx = 1
+                     serverside = prove $ authedIndex idx serverVect @{ProverAuth}
+                 in  verify (authedIndex idx clientVect @{VerifierAuth}) serverside
+
+||| A test of the AuthList; evaluating @verifiedElem@ takes forever but executing
+||| the following test is quite snappy.
+testVect : IO ()
+testVect = printLn $ VectTest.verifiedElem
 
 namespace TreeTest
   SecureHashable String where
@@ -348,7 +426,11 @@ namespace TreeTest
     Leaf : a -> Tree authty a 
     Node : authty (Tree authty a) -> authty (Tree authty a) -> Tree authty a
 
-test : IO ()
-test = printLn $ verifiedIdx
+  -- TODO: SecureHashable and Encodable implementations
+
+  0 AuthTree : (0 authty : Type -> Type) -> Type -> Type
+  AuthTree authty a = authty (Tree authty a)
+
+  
 
 
