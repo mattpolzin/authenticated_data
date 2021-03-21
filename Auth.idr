@@ -111,8 +111,7 @@ AuthType Unproven where
 
   -- TODO: decode not valid?
   decodeA x = let decoded = decode x
-              in
-                  (hash decoded, decoded)
+              in  (hash decoded, decoded)
 
 public export
 AuthType Certified where
@@ -144,15 +143,13 @@ export
 Functor ProverM where
   map f (MkProverM runProver) = MkProverM $ \foorp => 
                                  let (foorp', x) = runProver foorp
-                                 in
-                                     (foorp', f x)
+                                 in  (foorp', f x)
 
 bindp : ProverM a -> (a -> ProverM b) -> ProverM b
 bindp (MkProverM runProver) f = MkProverM $ \foorp => 
                                  let (foorp', x) = runProver foorp
                                      (foorp'', x') = (f x).runProver foorp'
-                                 in
-                                     (foorp'', x')
+                                 in  (foorp'', x')
 
 export
 [ProverAp] Applicative ProverM where
@@ -273,8 +270,7 @@ namespace StringTest
   export
   verifiedString : Maybe String
   verifiedString = let serverside = prove' serverString
-                   in 
-                       verify' clientString serverside
+                   in  verify' clientString serverside
 
 namespace ListTest
   SecureHashable String where
@@ -294,10 +290,9 @@ namespace ListTest
   (SecureHashable a, Encodable a, AuthType authty) => Encodable (L authty a) where
     encode [] = ""
     encode (Cons x xs) = assert_total $ encode x <+> let rest = (encode xs)
-                                                     in
-                                                         if rest == ""
-                                                            then ""
-                                                            else "," <+> rest
+                                                     in  if rest == ""
+                                                           then ""
+                                                           else "," <+> rest
 
     decode = decodeEach . toList . (map pack) . (split (== ',')) . unpack
       where
@@ -305,15 +300,14 @@ namespace ListTest
         decodeEach [] = Nil
         decodeEach (x :: xs) = assert_total $ 
                                  let rest = (concat . (intersperse ",")) xs
-                                 in
-                                     Cons (decode x) (decode rest)
+                                 in  Cons (decode x) (decode rest)
 
   0 AuthList : (0 authty : Type -> Type) -> Type -> Type
   AuthList authty a = authty (L authty a)
 
-  toAuthList : {auto auther : Authenticated m authty} -> (SecureHashable a, Encodable a) => List a -> AuthList authty a
-  toAuthList [] = auth Nil @{auther}
-  toAuthList (x :: xs) = auth (Cons x (toAuthList xs @{auther})) @{auther}
+  toAuthList : {auto authed : Authenticated m authty} -> (SecureHashable a, Encodable a) => List a -> AuthList authty a
+  toAuthList [] = auth Nil @{authed}
+  toAuthList (x :: xs) = auth (Cons x (toAuthList xs @{authed})) @{authed}
 
   export
   serverList : AuthList Unproven String
@@ -324,7 +318,7 @@ namespace ListTest
   clientList = toAuthList list1 @{VerifierAuth}
 
   export
-  authedIndex : {auto auther : Authenticated m authty} -> (SecureHashable a, Encodable a) => (n : Nat) -> AuthList authty a -> m (Maybe a)
+  authedIndex : Authenticated m authty => (SecureHashable a, Encodable a) => (n : Nat) -> AuthList authty a -> m (Maybe a)
 
   authedIndex' : (SecureHashable a, Encodable a, Authenticated m authty) => (n : Nat) -> L authty a -> m (Maybe a)
   authedIndex' 0 [] = pure Nothing
@@ -344,8 +338,7 @@ namespace ListTest
   verifiedIdx : Maybe String
   verifiedIdx = let idx = 1
                     serverside = prove $ authedIndex idx serverList @{ProverAuth}
-                in
-                    verify (authedIndex idx clientList @{VerifierAuth}) serverside
+                in  verify (authedIndex idx clientList @{VerifierAuth}) serverside
 
 namespace TreeTest
   SecureHashable String where
