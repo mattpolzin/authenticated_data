@@ -16,6 +16,7 @@ import Data.Bits
 import Data.List
 import Data.List1
 import Data.Vect
+
 import Control.Monad.Identity
 
 import Debug.Trace
@@ -184,21 +185,23 @@ Verifier a = VerifierM Hash
 
 export
 Functor VerifierM where
-  map f (MkVerifierM runVerifier) = MkVerifierM $ \proof => 
-                                     do (proof', x) <- runVerifier proof
-                                        Just (proof', f x)
+  map f (MkVerifierM runVerifier) = MkVerifierM $ \p => 
+                                     do (p', x) <- runVerifier p
+                                        Just (p', f x)
 
 bindv : VerifierM a -> (a -> VerifierM b) -> VerifierM b
-bindv (MkVerifierM runVerifier) f = MkVerifierM $ \proof => 
-                                     do (proof', x) <- runVerifier proof
-                                        (f x).runVerifier proof'
+bindv (MkVerifierM runVerifier) f = MkVerifierM $ \p => 
+                                     do (p', x) <- runVerifier p
+                                        (f x).runVerifier p'
 
 export
 [VerifierAp] Applicative VerifierM where
-  pure x = MkVerifierM $ \proof => Just (proof, x)
-  f <*> p = bindv f $ \f' => 
-              bindv p $ \p' => MkVerifierM $ \proof => Just (proof, f' p')
+  pure x = MkVerifierM $ \p => Just (p, x)
 
+  f <*> p = bindv f $ \f' => 
+              bindv p $ \p' => MkVerifierM $ \p'' => Just (p'', f' p')
+
+{-
 export
 Monad VerifierM using VerifierAp where
   (>>=) = bindv
@@ -434,3 +437,4 @@ namespace TreeTest
   
 
 
+-}
