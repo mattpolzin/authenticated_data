@@ -201,7 +201,6 @@ export
   f <*> p = bindv f $ \f' => 
               bindv p $ \p' => MkVerifierM $ \p'' => Just (p'', f' p')
 
-{-
 export
 Monad VerifierM using VerifierAp where
   (>>=) = bindv
@@ -276,6 +275,7 @@ namespace StringTest
   verifiedString = let serverside = prove' serverString
                    in  verify' clientString serverside
 
+
 namespace ListTest
   SecureHashable String where
     hash x = x ++ x
@@ -347,6 +347,8 @@ namespace ListTest
 ||| the following test is quite snappy.
 testList : IO ()
 testList = printLn $ verifiedElem
+
+{-
 
 namespace VectTest
   SecureHashable String where
@@ -421,6 +423,8 @@ namespace VectTest
 testVect : IO ()
 testVect = printLn $ VectTest.verifiedElem
 
+-}
+
 namespace TreeTest
   SecureHashable String where
     hash x = x ++ x
@@ -437,4 +441,3 @@ namespace TreeTest
   
 
 
--}
